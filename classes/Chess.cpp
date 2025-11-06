@@ -83,15 +83,16 @@ void Chess::FENtoBoard(const std::string& fen)
     int rank = 0;
     int file = 0;
     // Iterate over each letter correlating to different square
-    for(std::string letters: rows){
+    for(int i = 7; i>=0; i--){
+        std::string letters = rows[i];
         for(char letter: letters){
             Bit* piece;
-            int playerColor = 0; // Default white
+            int playerColor = 1; // Default Black
             int asciiVal = static_cast<int> (letter);
 
-            // If uppercase, change to black
+            // If uppercase, change to white
             if(asciiVal >= 65 && asciiVal <= 90){
-                playerColor = 1;
+                playerColor = 0;
                 letter = std::tolower(letter);
             }
 
