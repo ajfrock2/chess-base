@@ -46,7 +46,12 @@ class BitboardElement {
         return *this;
     }
 
-    void printBitboard() {
+    BitboardElement operator|(const BitboardElement& other) const {
+    return BitboardElement(_data | other._data);
+    }
+
+
+    void printBitboard(std::string label) {
         std::cout << "\n  a b c d e f g h\n";
         for (int rank = 7; rank >= 0; rank--) {
             std::cout << (rank + 1) << " ";
@@ -62,6 +67,7 @@ class BitboardElement {
             std::cout << std::flush;
         }
         std::cout << "  a b c d e f g h\n";
+        std::cout << label << std::endl;
         std::cout << std::flush;
     }
 

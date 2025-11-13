@@ -1,10 +1,12 @@
 #include "Chess.h"
+#include "BitBoard.h"
 #include <limits>
 #include <cmath>
 #include <sstream>
 #include <vector>
 #include <string>
 #include <cctype>
+#include <iostream>
 
 Chess::Chess()
 {
@@ -50,11 +52,15 @@ void Chess::setUpBoard()
     _gameOptions.rowY = 8;
 
     _grid->initializeChessSquares(pieceSize, "boardsquare.png");
+    initializeStaticMoves();
+
     FENtoBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
-    
     //FENtoBoard("8/1p3pp1/p2p4/3P4/4P3/5N2/PP3PPP/RNBQKB1R"); // Test 1
     //FENtoBoard("r1bqkbnr/pppppppp/2n5/8/8/2N5/PPPPPPPP/R1BQKBNR"); // Test 2
+    FENtoBoard("rnbqkbnr/pppppppp/2k5/8/8/5K2/PPPPPPPP/RNBQKBNR"); // King Test
 
+    validMoves.clear();
+    findValidMoves(validMoves);
     startGame();
 }
 
@@ -87,6 +93,7 @@ void Chess::FENtoBoard(const std::string& fen)
         std::string letters = rows[i];
         for(char letter: letters){
             Bit* piece;
+            int tag = 0;
             int playerColor = 1; // Default Black
             int asciiVal = static_cast<int> (letter);
 
@@ -101,21 +108,27 @@ void Chess::FENtoBoard(const std::string& fen)
             {
                 case 'p':
                     piece = PieceForPlayer(playerColor, ChessPiece::Pawn);
+                    tag = 1;
                     break;
                 case 'r':
                     piece = PieceForPlayer(playerColor, ChessPiece::Rook);
+                    tag = 4;
                     break;
                 case 'n':
                     piece = PieceForPlayer(playerColor, ChessPiece::Knight);
+                    tag = 2;
                     break;
                 case 'b':
                     piece = PieceForPlayer(playerColor, ChessPiece::Bishop);
+                    tag = 3;
                     break;
                 case 'k':
                     piece = PieceForPlayer(playerColor, ChessPiece::King);
+                    tag = 6;
                     break;
                 case 'q':
                     piece = PieceForPlayer(playerColor, ChessPiece::Queen);
+                    tag = 5;
                     break;
                 default:
                     // Number logic
@@ -126,6 +139,7 @@ void Chess::FENtoBoard(const std::string& fen)
             // Add the piece to board
             piece->setPosition(_grid->getSquare(file, rank)->getPosition());
             _grid->getSquare(file, rank)->setBit(piece);
+            piece->setGameTag(tag + 128 * playerColor);
             
             file++;
         }
@@ -150,7 +164,13 @@ bool Chess::canBitMoveFrom(Bit &bit, BitHolder &src)
 
 bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
-    return true;
+    for(BitMove move: validMoves){
+        if(_grid->getSquareByIndex(move.from) == &src
+        && _grid->getSquareByIndex(move.to) == &dst){
+            return true;
+        }
+    }
+    return false;
 }
 
 void Chess::stopGame()
@@ -158,6 +178,13 @@ void Chess::stopGame()
     _grid->forEachSquare([](ChessSquare* square, int x, int y) {
         square->destroyBit();
     });
+}
+
+void Chess::bitMovedFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
+{
+    Game::bitMovedFromTo(bit, src, dst);
+    validMoves.clear();
+    findValidMoves(validMoves);
 }
 
 Player* Chess::ownerAt(int x, int y) const
@@ -209,4 +236,144 @@ void Chess::setStateString(const std::string &s)
             square->setBit(nullptr);
         }
     });
+}
+
+// Find all the static moves for Knights and Kings ----Change, maybe pawns----
+void Chess::initializeStaticMoves(){
+    std::pair<int, int> knightOffsets[8] = {{1,2}, {1,-2}, {-1,2}, {-1,-2}, {2,1}, {2,-1}, {-2,1}, {-2,-1}};
+    std::pair<int, int> kingOffsets[8] = {{1,0}, {1,1}, {0,1}, {-1,1}, {-1,0}, {-1,-1}, {0,-1}, {1,-1}};
+    for(int i=0; i<64; i++){
+        int x = i % 8;  // column/file
+        int y = i / 8;  // row/rank
+
+        addStaticMoves(staticKnightMoves, knightOffsets, 8, i, x, y);
+        addStaticMoves(staticKingMoves, kingOffsets, 8, i, x, y);
+        // Make unique one for pawns
+        //Delete addStaticMoves(staticWhitePawnMoves, whitePawnOffsets, 4, i, x, y);
+        //Delete addStaticMoves(staticBlackPawnMoves, blackPawnOffsets, 4, i, x, y);
+    }
+}
+// Add static moves to the each square array based on offsets
+void Chess::addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::pair<int,int> offsets[], int numOffsets, int i, int x, int y){
+    staticPieceMoves[i] = 0ULL;
+    for(int j=0; j<numOffsets; j++){
+        std::pair<int, int> offset = offsets[j];
+            int newX = x + offset.first;
+            int newY = y + offset.second;
+
+            // Check for no off board moves
+            if(newX < 8 && newX > -1 && newY < 8 && newY >-1){
+                staticPieceMoves[i] |= (1ULL << (newX + 8 * newY));
+            }
+        }
+}
+
+void Chess::findValidMoves(std::vector<BitMove> &validMoves){
+    BitboardElement whiteKnightPosBitboard = 0;
+    BitboardElement blackKnightPosBitboard = 0;
+    BitboardElement whiteKingPosBitboard = 0;
+    BitboardElement blackKingPosBitboard = 0;
+    BitboardElement whitePawnPosBitboard = 0;
+    BitboardElement blackPawnPosBitboard = 0;
+
+    BitboardElement whitePosBitboard = 0;
+    BitboardElement blackPosBitboard = 0;
+
+    BitboardElement notAFile(0xFEFEFEFEFEFEFEFEULL);
+    BitboardElement notHFile(0x7F7F7F7F7F7F7F7FULL);
+    BitboardElement rank3(0x0000000000FF0000ULL);
+    BitboardElement rank6(0x0000FF0000000000ULL);
+
+
+    //Find all pieces and update positionBitBoards
+    _grid->forEachSquare([&](ChessSquare* square, int x, int y){
+        // Crash Prevention in case of empty squares
+        Bit* piece = square->bit();
+        if (!piece) return;
+
+        int index = y * 8 + x;
+
+        // Populate position bitboards
+        // Magic numbers are the tags of the pieces
+        findPiece(whiteKnightPosBitboard, piece, index, 2); // White Knight
+        findPiece(blackKnightPosBitboard, piece, index, 130); // Black Knight
+        findPiece(whiteKingPosBitboard, piece, index, 6); // White King
+        findPiece(blackKingPosBitboard, piece, index, 134); // White King
+        findPiece(whitePawnPosBitboard, piece, index, 1); // White Pawn
+        findPiece(blackPawnPosBitboard, piece, index, 129); // Black Pawn
+    });
+
+    whitePosBitboard = whiteKnightPosBitboard | whiteKingPosBitboard | whitePawnPosBitboard;
+    blackPosBitboard = blackKnightPosBitboard | blackKingPosBitboard | blackPawnPosBitboard;
+
+    // White moves
+    if(getCurrentPlayer()->playerNumber() == 0)
+    {
+        // Knights
+        whiteKnightPosBitboard.forEachBit([&](int indexOfFrom){
+            staticKnightMoves[indexOfFrom].forEachBit([&](int indexOfTo){
+                validMoves.emplace_back(indexOfFrom, indexOfTo, Knight);
+            });
+        });
+        // Kings
+        whiteKingPosBitboard.forEachBit([&](int indexOfFrom){
+            staticKingMoves[indexOfFrom].forEachBit([&](int indexOfTo){
+                validMoves.emplace_back(indexOfFrom, indexOfTo, King);
+            });
+        });
+        // Pawns
+        whitePawnPosBitboard.forEachBit([&](int indexOfFrom){
+            // Forward Push
+            //if(nothing in front of)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom + 8, Pawn);
+            // Double Forward Push
+            //if on 2nd rank 
+            validMoves.emplace_back(indexOfFrom, indexOfFrom + 16, Pawn);
+            //Attack Top Left
+            //if(somthing top left)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom + 7, Pawn);
+            //Attack Top Right
+            //if(somthing top right)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom + 9, Pawn);
+
+        });
+    }
+    // Black Moves
+    else
+    {
+        //Knights
+        blackKnightPosBitboard.forEachBit([&](int indexOfFrom){
+            staticKnightMoves[indexOfFrom].forEachBit([&](int indexOfTo){
+                validMoves.emplace_back(indexOfFrom, indexOfTo, Knight);
+        });
+        });
+        // Kings
+        blackKingPosBitboard.forEachBit([&](int indexOfFrom){
+            staticKingMoves[indexOfFrom].forEachBit([&](int indexOfTo){
+                validMoves.emplace_back(indexOfFrom, indexOfTo, King);
+            });
+        });
+        // Pawns 
+        blackPawnPosBitboard.forEachBit([&](int indexOfFrom){
+            // Forward Push
+            //if(nothing in front of)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom - 8, Pawn);
+            // Double Forward Push
+            //if on 7th rank 
+            validMoves.emplace_back(indexOfFrom, indexOfFrom - 16, Pawn);
+            //Attack Bottom Left
+            //if(somthing bottom left)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom  -9, Pawn);
+            //Attack Bottom Right
+            //if(somthing Bottom right)
+            validMoves.emplace_back(indexOfFrom, indexOfFrom -7, Pawn);
+        });
+    }
+}
+
+void Chess::findPiece(BitboardElement &PosBitboard, Bit* piece, int index, int tag){
+    if(piece->gameTag() == tag){
+    // Add both piece colors to bitboard based on stateString
+        PosBitboard |= (1ULL << index);   
+    }
 }
