@@ -47,7 +47,22 @@ class BitboardElement {
     }
 
     BitboardElement operator|(const BitboardElement& other) const {
-    return BitboardElement(_data | other._data);
+        return BitboardElement(_data | other._data);
+    }
+    
+    BitboardElement operator&(const BitboardElement& other) const {
+        return BitboardElement(_data & other._data);
+    }
+
+    BitboardElement operator~() const {
+        return BitboardElement(~_data);
+    }
+
+    BitboardElement operator<<(int shift) const {
+        return BitboardElement(_data << shift);
+    }
+    BitboardElement operator>>(int shift) const {
+        return BitboardElement(_data >> shift);
     }
 
 

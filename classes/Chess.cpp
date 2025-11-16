@@ -57,7 +57,7 @@ void Chess::setUpBoard()
     FENtoBoard("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     //FENtoBoard("8/1p3pp1/p2p4/3P4/4P3/5N2/PP3PPP/RNBQKB1R"); // Test 1
     //FENtoBoard("r1bqkbnr/pppppppp/2n5/8/8/2N5/PPPPPPPP/R1BQKBNR"); // Test 2
-    FENtoBoard("rnbqkbnr/pppppppp/2k5/8/8/5K2/PPPPPPPP/RNBQKBNR"); // King Test
+    //FENtoBoard("rnbqkbnr/pppppppp/2k5/8/8/5K2/PPPPPPPP/RNBQKBNR"); // King Test
 
     validMoves.clear();
     findValidMoves(validMoves);
@@ -268,6 +268,7 @@ void Chess::addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::p
         }
 }
 
+// Finds all valid chess moves from the board state
 void Chess::findValidMoves(std::vector<BitMove> &validMoves){
     BitboardElement whiteKnightPosBitboard = 0;
     BitboardElement blackKnightPosBitboard = 0;
@@ -275,14 +276,16 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves){
     BitboardElement blackKingPosBitboard = 0;
     BitboardElement whitePawnPosBitboard = 0;
     BitboardElement blackPawnPosBitboard = 0;
+    BitboardElement whiteQueenPosBitboard = 0;
+    BitboardElement blackQueenPosBitboard = 0;
+    BitboardElement whiteRookPosBitboard = 0;
+    BitboardElement blackRookPosBitboard = 0;
+    BitboardElement whiteBishopPosBitboard = 0;
+    BitboardElement blackBishopPosBitboard = 0;
 
     BitboardElement whitePosBitboard = 0;
     BitboardElement blackPosBitboard = 0;
-
-    BitboardElement notAFile(0xFEFEFEFEFEFEFEFEULL);
-    BitboardElement notHFile(0x7F7F7F7F7F7F7F7FULL);
-    BitboardElement rank3(0x0000000000FF0000ULL);
-    BitboardElement rank6(0x0000FF0000000000ULL);
+    BitboardElement occupancyBitboard = 0;
 
 
     //Find all pieces and update positionBitBoards
@@ -295,85 +298,122 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves){
 
         // Populate position bitboards
         // Magic numbers are the tags of the pieces
-        findPiece(whiteKnightPosBitboard, piece, index, 2); // White Knight
-        findPiece(blackKnightPosBitboard, piece, index, 130); // Black Knight
-        findPiece(whiteKingPosBitboard, piece, index, 6); // White King
-        findPiece(blackKingPosBitboard, piece, index, 134); // White King
         findPiece(whitePawnPosBitboard, piece, index, 1); // White Pawn
+        findPiece(whiteKnightPosBitboard, piece, index, 2); // White Knight
+        findPiece(whiteBishopPosBitboard, piece, index, 3);// White Bishop
+        findPiece(whiteRookPosBitboard, piece, index, 4);// White Rook
+        findPiece(whiteQueenPosBitboard, piece, index, 5);// White Queen
+        findPiece(whiteKingPosBitboard, piece, index, 6); // White King
         findPiece(blackPawnPosBitboard, piece, index, 129); // Black Pawn
+        findPiece(blackKnightPosBitboard, piece, index, 130); // Black Knight
+        findPiece(blackBishopPosBitboard, piece, index, 131);// Black Bishop
+        findPiece(blackRookPosBitboard, piece, index, 132);// Black Rook
+        findPiece(blackQueenPosBitboard, piece, index, 133);// Black Queen
+        findPiece(blackKingPosBitboard, piece, index, 134); // Black King
     });
 
-    whitePosBitboard = whiteKnightPosBitboard | whiteKingPosBitboard | whitePawnPosBitboard;
-    blackPosBitboard = blackKnightPosBitboard | blackKingPosBitboard | blackPawnPosBitboard;
+    whitePosBitboard = whiteKnightPosBitboard | whiteKingPosBitboard | whitePawnPosBitboard | 
+        whiteBishopPosBitboard | whiteRookPosBitboard | whiteQueenPosBitboard;
+    blackPosBitboard = blackKnightPosBitboard | blackKingPosBitboard | blackPawnPosBitboard | 
+        blackBishopPosBitboard| blackRookPosBitboard | blackQueenPosBitboard;
+    occupancyBitboard = whitePawnPosBitboard | blackPosBitboard;
+    
 
     // White moves
     if(getCurrentPlayer()->playerNumber() == 0)
     {
-        // Knights
-        whiteKnightPosBitboard.forEachBit([&](int indexOfFrom){
-            staticKnightMoves[indexOfFrom].forEachBit([&](int indexOfTo){
-                validMoves.emplace_back(indexOfFrom, indexOfTo, Knight);
-            });
-        });
-        // Kings
-        whiteKingPosBitboard.forEachBit([&](int indexOfFrom){
-            staticKingMoves[indexOfFrom].forEachBit([&](int indexOfTo){
-                validMoves.emplace_back(indexOfFrom, indexOfTo, King);
-            });
-        });
-        // Pawns
-        whitePawnPosBitboard.forEachBit([&](int indexOfFrom){
-            // Forward Push
-            //if(nothing in front of)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom + 8, Pawn);
-            // Double Forward Push
-            //if on 2nd rank 
-            validMoves.emplace_back(indexOfFrom, indexOfFrom + 16, Pawn);
-            //Attack Top Left
-            //if(somthing top left)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom + 7, Pawn);
-            //Attack Top Right
-            //if(somthing top right)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom + 9, Pawn);
-
-        });
+        generateKnightMoves(whiteKnightPosBitboard, whitePosBitboard, validMoves);
+        generateKingMoves(whiteKingPosBitboard, whitePosBitboard, validMoves);
+        generatePawnMoves(whitePawnPosBitboard, blackPosBitboard, occupancyBitboard, validMoves, true);
+        
     }
     // Black Moves
     else
     {
-        //Knights
-        blackKnightPosBitboard.forEachBit([&](int indexOfFrom){
-            staticKnightMoves[indexOfFrom].forEachBit([&](int indexOfTo){
-                validMoves.emplace_back(indexOfFrom, indexOfTo, Knight);
-        });
-        });
-        // Kings
-        blackKingPosBitboard.forEachBit([&](int indexOfFrom){
-            staticKingMoves[indexOfFrom].forEachBit([&](int indexOfTo){
-                validMoves.emplace_back(indexOfFrom, indexOfTo, King);
-            });
-        });
-        // Pawns 
-        blackPawnPosBitboard.forEachBit([&](int indexOfFrom){
-            // Forward Push
-            //if(nothing in front of)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom - 8, Pawn);
-            // Double Forward Push
-            //if on 7th rank 
-            validMoves.emplace_back(indexOfFrom, indexOfFrom - 16, Pawn);
-            //Attack Bottom Left
-            //if(somthing bottom left)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom  -9, Pawn);
-            //Attack Bottom Right
-            //if(somthing Bottom right)
-            validMoves.emplace_back(indexOfFrom, indexOfFrom -7, Pawn);
-        });
+        generateKnightMoves(blackKnightPosBitboard, blackPosBitboard, validMoves);
+        generateKingMoves(blackKingPosBitboard, blackPosBitboard, validMoves);
+        generatePawnMoves(blackPawnPosBitboard, whitePosBitboard, occupancyBitboard, validMoves, false);
     }
+
 }
 
+// Looks at a piece, it if matches the tag, adds it to the bitboard
 void Chess::findPiece(BitboardElement &PosBitboard, Bit* piece, int index, int tag){
     if(piece->gameTag() == tag){
     // Add both piece colors to bitboard based on stateString
         PosBitboard |= (1ULL << index);   
     }
+}
+
+void Chess::generateKnightMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves){
+    positionBitboard.forEachBit([&](int indexOfFrom){
+        BitboardElement tempOffets = staticKnightMoves[indexOfFrom];
+        tempOffets = tempOffets & (~friendlyBitboard);
+        tempOffets.forEachBit([&](int indexOfTo){
+            validMoves.emplace_back(indexOfFrom, indexOfTo, Knight);
+        });
+    });
+}
+
+void Chess::generateKingMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves){
+    positionBitboard.forEachBit([&](int indexOfFrom){
+        BitboardElement tempOffets = staticKingMoves[indexOfFrom];
+        tempOffets = tempOffets & (~friendlyBitboard);
+        tempOffets.forEachBit([&](int indexOfTo){
+            validMoves.emplace_back(indexOfFrom, indexOfTo, King);
+        });
+    });
+}
+
+void Chess::generatePawnMoves(BitboardElement pawnPositionBitboard, BitboardElement EnemyPositionBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves, bool white){
+    BitboardElement notAFile(0xFEFEFEFEFEFEFEFEULL);
+    BitboardElement notHFile(0x7F7F7F7F7F7F7F7FULL);
+    BitboardElement rank3(0x0000000000FF0000ULL);
+    BitboardElement rank6(0x0000FF0000000000ULL);
+
+    BitboardElement singlePush = 0;
+    BitboardElement doublePush = 0;
+    BitboardElement attacksLeft = 0;
+    BitboardElement attacksRight = 0;
+    int singleFrom;
+    int doubleFrom;
+    int leftFrom;
+    int rightFrom;
+
+    if(white){
+        // White moves
+        singlePush =(pawnPositionBitboard << 8) & (~occupancyBitboard);
+        doublePush = ((singlePush & rank3) << 8) & (~occupancyBitboard);
+        attacksLeft =(pawnPositionBitboard << 7) & notHFile & EnemyPositionBitboard;
+        attacksRight =(pawnPositionBitboard << 9) & notAFile & EnemyPositionBitboard;
+            
+        singleFrom = -8;
+        doubleFrom = -16;
+        leftFrom = -7;
+        rightFrom = -9;
+    }else{
+        // Black moves
+        singlePush =(pawnPositionBitboard >> 8) & (~occupancyBitboard);
+        doublePush = ((singlePush & rank6) >> 8) & (~occupancyBitboard);
+        attacksLeft =(pawnPositionBitboard >> 9) & notHFile & EnemyPositionBitboard;
+        attacksRight =(pawnPositionBitboard >> 7) &  notAFile & EnemyPositionBitboard;
+
+        singleFrom = 8;
+        doubleFrom = 16;
+        leftFrom = 9;
+        rightFrom = 7;
+    }
+
+    singlePush.forEachBit([&](int indexOfTo){
+        validMoves.emplace_back(indexOfTo + singleFrom, indexOfTo, Pawn);
+    });
+    doublePush.forEachBit([&](int indexOfTo){
+        validMoves.emplace_back(indexOfTo + doubleFrom, indexOfTo, Pawn);
+    });
+    attacksLeft.forEachBit([&](int indexOfTo){
+        validMoves.emplace_back(indexOfTo + leftFrom, indexOfTo, Pawn);
+    });
+    attacksRight.forEachBit([&](int indexOfTo){
+        validMoves.emplace_back(indexOfTo + rightFrom, indexOfTo, Pawn);
+    });   
 }

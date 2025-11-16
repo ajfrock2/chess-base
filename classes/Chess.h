@@ -48,6 +48,10 @@ public:
     void findValidMoves(std::vector<BitMove> &validMoves);
     void findPiece(BitboardElement &PosBitboard, Bit* piece, int index, int tag);
     void addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::pair<int,int> offsets[], int numOffsets, int i, int x, int y);
+    void generateKnightMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves);
+    void generateKingMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves);
+    void generatePawnMoves(BitboardElement positionBitboard, BitboardElement enemyPositionBitboard, BitboardElement occupancyBitboard, 
+        std::vector<BitMove> &validMoves, bool white);
 
 private:
     Bit* PieceForPlayer(const int playerNumber, ChessPiece piece);
