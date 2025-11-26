@@ -3,6 +3,7 @@
 #include "Game.h"
 #include "Grid.h"
 #include "Bitboard.h"
+#include "MagicBitboards.h"
 
 constexpr int pieceSize = 80;
 
@@ -52,6 +53,11 @@ public:
     void generateKingMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves);
     void generatePawnMoves(BitboardElement positionBitboard, BitboardElement enemyPositionBitboard, BitboardElement occupancyBitboard, 
         std::vector<BitMove> &validMoves, bool white);
+    void generateRookMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
+    void generateBishopMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
+    void generateQueenMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
+    void updateAI();
+    int negamax(std::string& state, int depth, int a, int b, int playerColor);
 
 private:
     Bit* PieceForPlayer(const int playerNumber, ChessPiece piece);
