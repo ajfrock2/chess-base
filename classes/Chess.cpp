@@ -6,6 +6,7 @@
 #include <string>
 #include <cctype>
 #include <iostream>
+#include <random> //Delete later maybe
 
 Chess::Chess()
 {
@@ -61,9 +62,13 @@ void Chess::setUpBoard()
     //FENtoBoard("8/8/1B4b1/8/1b4B1/8/8/8"); // Bishop test
     //FENtoBoard("8/8/1Q4q1/8/1q4Q1/8/8/8"); // Queen test
 
+    if (gameHasAI()) {
+        setAIPlayer(AI_PLAYER);
+    }
+
     validMoves.clear();
     initMagicBitboards();
-    findValidMoves(validMoves);
+    findValidMoves(validMoves, /*HUMAN_PLAYER*/ getCurrentPlayer()->playerNumber());
     startGame();
 }
 
@@ -187,7 +192,7 @@ void Chess::bitMovedFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
     Game::bitMovedFromTo(bit, src, dst);
     validMoves.clear();
-    findValidMoves(validMoves);
+    findValidMoves(validMoves, getCurrentPlayer()->playerNumber());
 }
 
 Player* Chess::ownerAt(int x, int y) const
@@ -269,7 +274,7 @@ void Chess::addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::p
 }
 
 // Finds all valid chess moves from the board state
-void Chess::findValidMoves(std::vector<BitMove> &validMoves){
+void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor){
     BitboardElement whiteKnightPosBitboard = 0;
     BitboardElement blackKnightPosBitboard = 0;
     BitboardElement whiteKingPosBitboard = 0;
@@ -320,7 +325,7 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves){
     
 
     // White moves
-    if(getCurrentPlayer()->playerNumber() == 0)
+    if(playerColor != 1) // Black/AI is always 1, white/Human can be -1 or 0
     {
         generateKnightMoves(whiteKnightPosBitboard, whitePosBitboard, validMoves);
         generateKingMoves(whiteKingPosBitboard, whitePosBitboard, validMoves);
@@ -339,7 +344,6 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves){
         generateBishopMoves(blackBishopPosBitboard, blackPosBitboard, occupancyBitboard, validMoves);
         generateQueenMoves(blackQueenPosBitboard, blackPosBitboard, occupancyBitboard, validMoves);
     }
-
 }
 
 // Looks at a piece, it if matches the tag, adds it to the bitboard
@@ -426,6 +430,7 @@ void Chess::generatePawnMoves(BitboardElement pawnPositionBitboard, BitboardElem
 void Chess::generateRookMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves){
     positionBitboard.forEachBit([&](int indexOfFrom){
         BitboardElement rookAttacks = getRookAttacks(indexOfFrom, occupancyBitboard.getData());
+        rookAttacks = rookAttacks & (~friendlyBitboard);
         rookAttacks.forEachBit([&](int indexOfTo){
             validMoves.emplace_back(indexOfFrom, indexOfTo, Rook);
         });
@@ -435,6 +440,7 @@ void Chess::generateRookMoves(BitboardElement positionBitboard, BitboardElement 
 void Chess::generateBishopMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves){
     positionBitboard.forEachBit([&](int indexOfFrom){
         BitboardElement bishopAttacks = getBishopAttacks(indexOfFrom, occupancyBitboard.getData());
+        bishopAttacks = bishopAttacks & (~friendlyBitboard);
         bishopAttacks.forEachBit([&](int indexOfTo){
             validMoves.emplace_back(indexOfFrom, indexOfTo, Bishop);
         });
@@ -444,6 +450,7 @@ void Chess::generateBishopMoves(BitboardElement positionBitboard, BitboardElemen
 void Chess::generateQueenMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves){
     positionBitboard.forEachBit([&](int indexOfFrom){
         BitboardElement queenAttacks = getQueenAttacks(indexOfFrom, occupancyBitboard.getData());
+        queenAttacks = queenAttacks & (~friendlyBitboard);
         queenAttacks.forEachBit([&](int indexOfTo){
             validMoves.emplace_back(indexOfFrom, indexOfTo, Bishop);
         });
@@ -458,26 +465,39 @@ void Chess::updateAI()
     int initialA = -10000000;
     int initialB = 10000000;
     int bestVal = -1000000;
-    BitMove *bestMove = nullptr;
+    BitMove bestMove;
+    bool foundBestMove = false;
     std::string state = stateString();
-    std::cout << state << std::endl;
 
     for(BitMove move: validMoves){
 
-        // TODO perform move
+        // Perform move
+        char captured = state[move.to];
+        state[move.to] = state[move.from];
+        state[move.from] = '0';
+
         int moveVal = negamax(state, 0, initialA, initialB, AI_PLAYER);
-        // TODO revert move
+
+        // Revert move
+        state[move.from] = state[move.to];
+        state[move.to] = captured;
 
         // If the value of the current move is more than the best value, update best
         if (moveVal > bestVal) {
-            bestMove = &move; 
+            foundBestMove = true;
+            bestMove = move; 
             bestVal = moveVal;
         }
     }
     
-    // TODO Make the best move
-    if(bestMove) {
-        // Bruh
+    // Finally make the move
+    if(foundBestMove) {
+        Bit* piece =_grid->getSquareByIndex(bestMove.from)->bit();
+        piece->setPosition(_grid->getSquareByIndex(bestMove.to)->getPosition());
+        _grid->getSquareByIndex(bestMove.to)->setBit(piece);
+        bitMovedFromTo(*piece, *_grid->getSquareByIndex(bestMove.from), *_grid->getSquareByIndex(bestMove.to));
+        
+        //_grid->getSquareByIndex(bestMove.from)->destroyBit();
     }
 }
 
@@ -486,24 +506,37 @@ void Chess::updateAI()
 //
 int Chess::negamax(std::string& state, int depth, int a, int b, int playerColor)
 {
-    
-    int score = 2; // TODO evaluateAIBoard(state);
+    // TODO adujst score calculation
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(0, 100);
+    int score = dist(gen);
+
     if(playerColor == HUMAN_PLAYER) {
         score = -score;
     }
 
-    if (abs(score) >= 3000) return score; //Someone likely won, don't continue calculations
-    if(depth == 6) return score; //Don't recurse to long
+    if (abs(score) >= 3000) return score; //TODO change Someone likely won, don't continue calculations
+    if(depth == 3) return score; //TODO Don't recurse to long
 
  
     int bestVal = -1000000;
     
-    // Recalcualte moves
-    for(BitMove move: validMoves){
+    std::vector<BitMove> newMoves;
+    findValidMoves(newMoves, playerColor);
+    
+    for(BitMove move: newMoves){
 
-        // TODO perform move
+        // Perform move
+        char captured = state[move.to];
+        state[move.to] = state[move.from];
+        state[move.from] = '0';
+        
         bestVal = std::max(bestVal, -negamax(state, depth+1, -b, -a, -playerColor));
-        // TODO revert move
+
+        // Revert move
+        state[move.from] = state[move.to];
+        state[move.to] = captured;
 
         a = std::max(a, bestVal);
         if(a >= b){

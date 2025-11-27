@@ -46,7 +46,7 @@ public:
     Grid* getGrid() override { return _grid; }
 
     void initializeStaticMoves();
-    void findValidMoves(std::vector<BitMove> &validMoves);
+    void findValidMoves(std::vector<BitMove> &validMoves, int playerColor);
     void findPiece(BitboardElement &PosBitboard, Bit* piece, int index, int tag);
     void addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::pair<int,int> offsets[], int numOffsets, int i, int x, int y);
     void generateKnightMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, std::vector<BitMove> &validMoves);
@@ -56,8 +56,10 @@ public:
     void generateRookMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
     void generateBishopMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
     void generateQueenMoves(BitboardElement positionBitboard, BitboardElement friendlyBitboard, BitboardElement occupancyBitboard, std::vector<BitMove> &validMoves);
-    void updateAI();
-    int negamax(std::string& state, int depth, int a, int b, int playerColor);
+    void updateAI() override;
+    int  negamax(std::string& state, int depth, int a, int b, int playerColor);
+    bool gameHasAI() override { return true; }
+
 
 private:
     Bit* PieceForPlayer(const int playerNumber, ChessPiece piece);
