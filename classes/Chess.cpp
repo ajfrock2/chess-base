@@ -68,7 +68,7 @@ void Chess::setUpBoard()
 
     validMoves.clear();
     initMagicBitboards();
-    findValidMoves(validMoves, /*HUMAN_PLAYER*/ getCurrentPlayer()->playerNumber());
+    findValidMoves(validMoves, /*HUMAN_PLAYER*/ getCurrentPlayer()->playerNumber(), stateString());
     startGame();
 }
 
@@ -192,7 +192,7 @@ void Chess::bitMovedFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
     Game::bitMovedFromTo(bit, src, dst);
     validMoves.clear();
-    findValidMoves(validMoves, getCurrentPlayer()->playerNumber());
+    findValidMoves(validMoves, getCurrentPlayer()->playerNumber(), stateString());
 }
 
 Player* Chess::ownerAt(int x, int y) const
@@ -274,7 +274,7 @@ void Chess::addStaticMoves(BitboardElement (&staticPieceMoves)[64], const std::p
 }
 
 // Finds all valid chess moves from the board state
-void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor){
+void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor, std::string state){
     BitboardElement whiteKnightPosBitboard = 0;
     BitboardElement blackKnightPosBitboard = 0;
     BitboardElement whiteKingPosBitboard = 0;
@@ -292,30 +292,56 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor){
     BitboardElement blackPosBitboard = 0;
     BitboardElement occupancyBitboard = 0;
 
-
     //Find all pieces and update positionBitBoards
-    _grid->forEachSquare([&](ChessSquare* square, int x, int y){
-        // Crash Prevention in case of empty squares
-        Bit* piece = square->bit();
-        if (!piece) return;
+    for (int i = 0; i < 64 && i < (int)state.size(); ++i) {
+        char c = state[i];
+        if (c == '0') continue;
 
-        int index = y * 8 + x;
+        switch (c) {
+            // White Pieces
+            case 'P':  // White Pawn
+                whitePawnPosBitboard |= (1ULL << i);
+                break;
+            case 'N':  // White Knight
+                whiteKnightPosBitboard |= (1ULL << i);
+                break;
+            case 'B':  // White Bishop
+                whiteBishopPosBitboard |= (1ULL << i);
+                break;
+            case 'R':  // White Rook
+                whiteRookPosBitboard |= (1ULL << i);
+                break;
+            case 'Q':  // White Queen
+                whiteQueenPosBitboard |= (1ULL << i);
+                break;
+            case 'K':  // White King
+                whiteKingPosBitboard |= (1ULL << i);
+                break;
 
-        // Populate position bitboards
-        // Magic numbers are the tags of the pieces
-        findPiece(whitePawnPosBitboard, piece, index, 1); // White Pawn
-        findPiece(whiteKnightPosBitboard, piece, index, 2); // White Knight
-        findPiece(whiteBishopPosBitboard, piece, index, 3);// White Bishop
-        findPiece(whiteRookPosBitboard, piece, index, 4);// White Rook
-        findPiece(whiteQueenPosBitboard, piece, index, 5);// White Queen
-        findPiece(whiteKingPosBitboard, piece, index, 6); // White King
-        findPiece(blackPawnPosBitboard, piece, index, 129); // Black Pawn
-        findPiece(blackKnightPosBitboard, piece, index, 130); // Black Knight
-        findPiece(blackBishopPosBitboard, piece, index, 131);// Black Bishop
-        findPiece(blackRookPosBitboard, piece, index, 132);// Black Rook
-        findPiece(blackQueenPosBitboard, piece, index, 133);// Black Queen
-        findPiece(blackKingPosBitboard, piece, index, 134); // Black King
-    });
+            // Black Pieces
+            case 'p':  // Black Pawn
+                blackPawnPosBitboard |= (1ULL << i);
+                break;
+            case 'n':  // Black Knight
+                blackKnightPosBitboard |= (1ULL << i);
+                break;
+            case 'b':  // Black Bishop
+                blackBishopPosBitboard |= (1ULL << i);
+                break;
+            case 'r':  // Black Rook
+                blackRookPosBitboard |= (1ULL << i);
+                break;
+            case 'q':  // Black Queen
+                blackQueenPosBitboard |= (1ULL << i);
+                break;
+            case 'k':  // Black King
+                blackKingPosBitboard |= (1ULL << i);
+                break;
+            default:
+                break;
+        }
+    }
+
 
     whitePosBitboard = whiteKnightPosBitboard | whiteKingPosBitboard | whitePawnPosBitboard | 
         whiteBishopPosBitboard | whiteRookPosBitboard | whiteQueenPosBitboard;
@@ -452,7 +478,7 @@ void Chess::generateQueenMoves(BitboardElement positionBitboard, BitboardElement
         BitboardElement queenAttacks = getQueenAttacks(indexOfFrom, occupancyBitboard.getData());
         queenAttacks = queenAttacks & (~friendlyBitboard);
         queenAttacks.forEachBit([&](int indexOfTo){
-            validMoves.emplace_back(indexOfFrom, indexOfTo, Bishop);
+            validMoves.emplace_back(indexOfFrom, indexOfTo, Queen);
         });
     });    
 }
@@ -476,7 +502,7 @@ void Chess::updateAI()
         state[move.to] = state[move.from];
         state[move.from] = '0';
 
-        int moveVal = negamax(state, 0, initialA, initialB, AI_PLAYER);
+        int moveVal = -negamax(state, 0, initialA, initialB, AI_PLAYER);
 
         // Revert move
         state[move.from] = state[move.to];
@@ -496,34 +522,41 @@ void Chess::updateAI()
         piece->setPosition(_grid->getSquareByIndex(bestMove.to)->getPosition());
         _grid->getSquareByIndex(bestMove.to)->setBit(piece);
         bitMovedFromTo(*piece, *_grid->getSquareByIndex(bestMove.from), *_grid->getSquareByIndex(bestMove.to));
-        
-        //_grid->getSquareByIndex(bestMove.from)->destroyBit();
+        _grid->getSquareByIndex(bestMove.from)->setBit(nullptr);
     }
 }
 
+int Chess::evaluateBoard(const std::string& state){
+    //AI wants high, human wants low
+    int totalSum = 0;
+    for(char c: state){
+        totalSum += evaluateScores[c];
+    }
+
+    //Added some randomness
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(-30, 30);
+    //totalSum += dist(gen); NOT RIGHT NOW
+    return totalSum;
+}
 //
 // player is the current player's number (AI or human)
 //
 int Chess::negamax(std::string& state, int depth, int a, int b, int playerColor)
 {
-    // TODO adujst score calculation
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(0, 100);
-    int score = dist(gen);
-
-    if(playerColor == HUMAN_PLAYER) {
-        score = -score;
-    }
-
-    if (abs(score) >= 3000) return score; //TODO change Someone likely won, don't continue calculations
-    if(depth == 3) return score; //TODO Don't recurse to long
+    
+    //if (abs(score) >= 9999) return score; //TODO change Someone likely won, don't continue calculations
+    
+    if(depth == 4){
+        return evaluateBoard(state) * playerColor; //TODO Don't recurse to long
+    } 
 
  
-    int bestVal = -1000000;
+    int bestVal = -10000000;
     
     std::vector<BitMove> newMoves;
-    findValidMoves(newMoves, playerColor);
+    findValidMoves(newMoves, playerColor, state); //TODO Could be the issue
     
     for(BitMove move: newMoves){
 
