@@ -61,14 +61,17 @@ void Chess::setUpBoard()
     //FENtoBoard("8/8/1R4r1/8/1r4R1/8/8/8"); // Rook test
     //FENtoBoard("8/8/1B4b1/8/1b4B1/8/8/8"); // Bishop test
     //FENtoBoard("8/8/1Q4q1/8/1q4Q1/8/8/8"); // Queen test
+    //FENtoBoard("8/8/4n3/8/3P1P2/Q7/8/8"); //AI Test
+
 
     if (gameHasAI()) {
         setAIPlayer(AI_PLAYER);
     }
 
-    validMoves.clear();
+    negaCount = 0;
+    allValidMoves.clear();
     initMagicBitboards();
-    findValidMoves(validMoves, /*HUMAN_PLAYER*/ getCurrentPlayer()->playerNumber(), stateString());
+    findValidMoves(allValidMoves, HUMAN_PLAYER, stateString());
     startGame();
 }
 
@@ -172,7 +175,7 @@ bool Chess::canBitMoveFrom(Bit &bit, BitHolder &src)
 
 bool Chess::canBitMoveFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
-    for(BitMove move: validMoves){
+    for(BitMove move: allValidMoves){
         if(_grid->getSquareByIndex(move.from) == &src
         && _grid->getSquareByIndex(move.to) == &dst){
             return true;
@@ -191,8 +194,8 @@ void Chess::stopGame()
 void Chess::bitMovedFromTo(Bit &bit, BitHolder &src, BitHolder &dst)
 {
     Game::bitMovedFromTo(bit, src, dst);
-    validMoves.clear();
-    findValidMoves(validMoves, getCurrentPlayer()->playerNumber(), stateString());
+    allValidMoves.clear();
+    findValidMoves(allValidMoves, HUMAN_PLAYER, stateString());
 }
 
 Player* Chess::ownerAt(int x, int y) const
@@ -293,7 +296,7 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor, st
     BitboardElement occupancyBitboard = 0;
 
     //Find all pieces and update positionBitBoards
-    for (int i = 0; i < 64 && i < (int)state.size(); ++i) {
+    for (int i = 0; i < 64 && i < (int)state.size(); i++) {
         char c = state[i];
         if (c == '0') continue;
 
@@ -349,9 +352,8 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor, st
         blackBishopPosBitboard | blackRookPosBitboard | blackQueenPosBitboard;
     occupancyBitboard = whitePosBitboard | blackPosBitboard;
     
-
     // White moves
-    if(playerColor != 1) // Black/AI is always 1, white/Human can be -1 or 0
+    if(playerColor == HUMAN_PLAYER)
     {
         generateKnightMoves(whiteKnightPosBitboard, whitePosBitboard, validMoves);
         generateKingMoves(whiteKingPosBitboard, whitePosBitboard, validMoves);
@@ -370,6 +372,7 @@ void Chess::findValidMoves(std::vector<BitMove> &validMoves, int playerColor, st
         generateBishopMoves(blackBishopPosBitboard, blackPosBitboard, occupancyBitboard, validMoves);
         generateQueenMoves(blackQueenPosBitboard, blackPosBitboard, occupancyBitboard, validMoves);
     }
+
 }
 
 // Looks at a piece, it if matches the tag, adds it to the bitboard
@@ -494,22 +497,29 @@ void Chess::updateAI()
     BitMove bestMove;
     bool foundBestMove = false;
     std::string state = stateString();
+    allValidMoves.clear();
+    findValidMoves(allValidMoves, AI_PLAYER, state);
 
-    for(BitMove move: validMoves){
+    for(BitMove move: allValidMoves){
 
         // Perform move
-        char captured = state[move.to];
-        state[move.to] = state[move.from];
+        char boardSave = state[move.to];
+        char pieceMoving = state[move.from];
+        state[move.to] = pieceMoving;
         state[move.from] = '0';
 
         int moveVal = -negamax(state, 0, initialA, initialB, AI_PLAYER);
 
+        //std::cout << negaCount << ":::" << moveVal << std::endl;
         // Revert move
-        state[move.from] = state[move.to];
-        state[move.to] = captured;
+        state[move.from] = pieceMoving;
+        state[move.to] = boardSave;
+
 
         // If the value of the current move is more than the best value, update best
         if (moveVal > bestVal) {
+            //std::cout << "Prev:" << bestVal << std::endl;
+            //std::cout << "New:" << moveVal << std::endl;
             foundBestMove = true;
             bestMove = move; 
             bestVal = moveVal;
@@ -524,6 +534,8 @@ void Chess::updateAI()
         bitMovedFromTo(*piece, *_grid->getSquareByIndex(bestMove.from), *_grid->getSquareByIndex(bestMove.to));
         _grid->getSquareByIndex(bestMove.from)->setBit(nullptr);
     }
+    std::cout << "Fin" << " Moves: " << negaCount << std::endl;
+    negaCount = 0;
 }
 
 int Chess::evaluateBoard(const std::string& state){
@@ -533,43 +545,46 @@ int Chess::evaluateBoard(const std::string& state){
         totalSum += evaluateScores[c];
     }
 
-    //Added some randomness
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(-30, 30);
-    //totalSum += dist(gen); NOT RIGHT NOW
     return totalSum;
 }
-//
-// player is the current player's number (AI or human)
-//
+
 int Chess::negamax(std::string& state, int depth, int a, int b, int playerColor)
 {
+    negaCount++;
     
-    //if (abs(score) >= 9999) return score; //TODO change Someone likely won, don't continue calculations
-    
-    if(depth == 4){
-        return evaluateBoard(state) * playerColor; //TODO Don't recurse to long
+    if(depth == 3){
+        int debugSore = evaluateBoard(state) * playerColor;
+        /*std::cout << debugSore <<std::endl;
+        int stride = 8;
+        int height = 8;
+
+        for(int y=height - 1; y>=0; y--) {
+            std::cout << ("%s", state.substr(y*stride,stride).c_str()) << std::endl;;
+        } 
+        //std::cout << std::endl;
+        */
+        return debugSore; //TODO Don't recurse to long
     } 
 
  
     int bestVal = -10000000;
     
     std::vector<BitMove> newMoves;
-    findValidMoves(newMoves, playerColor, state); //TODO Could be the issue
+    findValidMoves(newMoves, -playerColor, state); //TODO Could be the issue, not anymore, almost certainly not anymore
     
     for(BitMove move: newMoves){
 
         // Perform move
-        char captured = state[move.to];
-        state[move.to] = state[move.from];
+        char boardSave = state[move.to];
+        char pieceMoving = state[move.from];
+        state[move.to] = pieceMoving;
         state[move.from] = '0';
         
         bestVal = std::max(bestVal, -negamax(state, depth+1, -b, -a, -playerColor));
 
         // Revert move
-        state[move.from] = state[move.to];
-        state[move.to] = captured;
+        state[move.from] = pieceMoving;
+        state[move.to] = boardSave;
 
         a = std::max(a, bestVal);
         if(a >= b){

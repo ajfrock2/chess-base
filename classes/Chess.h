@@ -73,14 +73,15 @@ private:
     BitboardElement staticKingMoves[64];
     BitboardElement staticWhitePawnMoves[64];
     BitboardElement staticBlackPawnMoves[64];
-    std::vector<BitMove> validMoves;
+    std::vector<BitMove> allValidMoves;
     std::map<char, int> evaluateScores = {
         {'P', 100}, {'p', -100},    // Pawns
-        {'N', 200}, {'n', -200},    // Knights
-        {'B', 230}, {'b', -230},    // Bishops
-        {'R', 400}, {'r', -400},    // Rooks
+        {'N', 300}, {'n', -300},    // Knights
+        {'B', 300}, {'b', -300},    // Bishops
+        {'R', 500}, {'r', -500},    // Rooks
         {'Q', 900}, {'q', -900},    // Queens
         {'K', 2000}, {'k', -2000},  // Kings
         {'0', 0}                     // Empty squares
     };
+    int negaCount;
 };

@@ -13,3 +13,4 @@ Had a bit of trouble working with the combination of pointers, refrence, and act
 Using the state string for all the calculations had a fair bit of issues.
 I mentally mixed up which pieces were black or white a few times, wasting time. (K vs k)
 Works with a depth of 3 fast, 4 is bearable. Hopefully wont get that much worse as I add actual board evaluation logic
+Had some hiccups getting the AI to play smart. Ultimately was caused by a bug with later depths and generating moves for the wrong player.
