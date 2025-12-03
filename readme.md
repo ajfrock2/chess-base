@@ -6,9 +6,9 @@ Took a while to grasp my head around, but I now at least understand how all the 
 Spent a good bit of time refractoring as well, hopefully this will help me in the long run.
 Definetily more readable now.
 
-Added Rook, Bishop, and Queen movement. Added randomized AI.
+Added Rook, Bishop, and Queen movement.
 
-Magicbitboards.h had a lot of the work already done, but it sitll took a little while to understand. 
+Magicbitboards.h had a lot of the work already done, but it still took a little while to understand. 
 Had a bit of trouble working with the combination of pointers, refrence, and actual objects. 
 Using the state string for all the calculations had a fair bit of issues.
 I mentally mixed up which pieces were black or white a few times, wasting time. (K vs k)
